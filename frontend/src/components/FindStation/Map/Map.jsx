@@ -1,25 +1,21 @@
-import style from './Map.module.css'
-import GoogleMapReact from 'google-map-react'
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faCircle as solidCircle} from '@fortawesome/free-solid-svg-icons'
-import { faCircle as regularCircle} from '@fortawesome/free-regular-svg-icons'
-import StationPin from '/StationPin.png'
+import { GoogleMap, LoadScript, Marker, Circle } from '@react-google-maps/api'
 import { useState, useEffect } from 'react'
+import style from './Map.module.css'
 
+export default function map({ getDataFromStation, sendStoreBackToStation }){
+    const [mapCenter, setMapCenter] = useState({lat: -40.88694417577929, lng: 172.25732675689105})
 
-export default function Map({getDataFromStation}){
-    const [address, setAddress] = useState('')
-    const [stationLocation, setStationLocation] = useState(getDataFromStation.locationData)
-    const [locationData, setLocationData] = useState({})
+    const [userInputLocation, setUserInputLocation] = useState({lat: 0, lng: 0})
+    const [zoom, setZoom] = useState(5.6)
     const [map, setMap] = useState(null)
     const [maps, setMaps] = useState(null)
-    const [coordinate, setCoordinates] = useState({lat: -40.88694417577929, lng: 172.25732675689105})
-    const [mapZoom, setMapZoom] = useState(5.6)
-    const [radius, setRadius] = useState(5000)
-    const [displayRadius, setDisplayRadius] = useState(radius / 1000)
-    const [circle, setCircle] = useState(null)
+    const [address, setAddress] = useState("")
+    const [storeLocation, setStoreLocation] = useState([])
+    const [filter, setFilter] = useState([])
+    const [storeByRegion, setStoreByRegion] = useState([])
+    const [nearbyStores, setNearbyStores] = useState([])
+    const [radius, setRadius] = useState(100)
     const apiKey = process.env.REACT_APP_API_KEY
-
 
     const locationPosition= [
         {
@@ -94,209 +90,271 @@ export default function Map({getDataFromStation}){
         },
     ]
 
+    const locationCount=[
+        {"Auckland": 71},
+        {"Bay of Plenty": 16},
+        {"Canterbury": 32},
+        {"Gisborne": 2},
+        {"Hawks Bay": 12},
+        {"Manawatu-Wanganui": 12},
+        {"Nelson, Tasman, Marlborough": 10},
+        {"Northland": 8},
+        {"Otago": 12},
+        {"Southland": 5},
+        {"Taranaki": 9},
+        {"Waikato": 33},
+        {"Wellington": 22},
+        {"West Coast": 2}
+    ]
+
+    const containerStyle = {
+        width: '100%',
+        height: '100vh'
+    };
+
+    const options = {
+        zoomControl: false,
+        streetViewControl: false,
+        mapTypeControl: false,
+        fullscreenControl: false,
+        keyboardShortcuts: false
+    }
+
     useEffect(() => {
-        if(getDataFromStation){
+        if(getDataFromStation && getDataFromStation?.locationData){
             setAddress(getDataFromStation.address)
-            setStationLocation(getDataFromStation.locationData)
-            handleLocationArea(getDataFromStation.locationData)
+            setFilter(getDataFromStation.filter)
+            setStoreLocation(getDataFromStation.locationData)
+
+            if(address === "" && storeLocation.length > 0){
+                sortStoreByRegion()               
+            }
+            console.log("Address updated: ", getDataFromStation.address)
         }
-        else{
-            console.error("getDataFromStation is not available or not an array")
+    }, [getDataFromStation, storeLocation])
+
+    useEffect(() => {
+        console.log("useEffect triggered:", { maps, map, address })
+        if(maps && map && address){
+            console.log("Running geocode for address: ", address)
+            handleGeoCode(address)
         }
-    }, [getDataFromStation])
+    }, [maps, map, address])
 
-    useEffect(() =>{
-        if(map && maps && address){
-            handleGeoCodeAddress(address)
+    useEffect(() => {
+        if(userInputLocation.lat !== 0 && userInputLocation.lng !== 0){
+            const radiusKm = 15
+            const servicesFilter = Array.isArray(filter[0]) ? filter[0]: []
+            const specialFuelTypeFilter = Array.isArray(filter[1]) ? filter[1]: []
+            const typeFilter = typeof filter[2] === 'string' ? filter[2] : '';
 
-            if(address !== ""){
-                setMapZoom(17)
+            const nearbyStore = storeLocation.map(store => {
+                const lat = Number(store.latitude)
+                const lng = Number(store.longitude)
+                const awayFromInput = calculateDistance(userInputLocation.lat, userInputLocation.lng, lat, lng)
+                
 
-                if(!isNaN(coordinate.lat) && !isNaN(coordinate.lng)){
-                    console.log("Coordinate: ", coordinate)
-                    const nearestStation = findNearestStation(coordinate.lat, coordinate.lng, stationLocation)
-                    console.log(nearestStation)
-                    if(nearestStation){
-                        setCoordinates({ lat: nearestStation.latitude, lng: nearestStation.longitude})
-                        map.setCenter({ lat:nearestStation.latitude, lng:nearestStation.longitude})
-                    }
-                }
+                const matchesServices = servicesFilter.length === 0 || servicesFilter.every(requiredService =>
+                    store.services.some(service => service.name === requiredService)
+                )
+                const matchesSpecialFuelType = specialFuelTypeFilter.length === 0 || specialFuelTypeFilter.every(requiredSpecialFuel => 
+                    store.special_fuel_Type.some(fuel => fuel.name === requiredSpecialFuel)
+                )
+                const matchesType = typeFilter === "" || typeFilter === store.type
+
+                console.log("Services Filter:", servicesFilter);
+                console.log("Store Services:", store.services);
+                console.log("Special Fuel Type Filter:", specialFuelTypeFilter);
+                console.log("Store Special Fuel Types:", store.special_fuel_Type);
+                console.log("Type Filter:", typeFilter);
+                console.log("Store Type:", store.type);
+
+                return { 
+                    ...store, 
+                    distance: awayFromInput,
+                    hasRequiredServices: matchesServices && matchesSpecialFuelType && matchesType    
+                }     
+            })
+            .filter(store => 
+                !isNaN(store.latitude) && 
+                !isNaN(store.longitude) && 
+                store.distance <= radiusKm &&
+                store.hasRequiredServices
+            )
+            .sort((a, b) => a.distance - b.distance)
+            setNearbyStores(nearbyStore)
+
+            if(nearbyStore.length > 0){
+                setMapCenter({lat: Number(nearbyStore[0].latitude), lng: Number(nearbyStore[0].longitude)})
             }
         }
-    }, [map, maps, address, coordinate])
+    }, [userInputLocation, storeLocation, filter])
 
-    useEffect(() =>{
-        if(map && maps && circle){
-            circle.setCenter(coordinate)
-            circle.setRadius(radius)
+    useEffect(() => {
+        if(address !== ""){
+            radius > 100 ? updateZoom() : setZoom(17)            
         }
-        setDisplayRadius(radius / 1000)
-    }, [coordinate, radius, map, maps, circle])
+        else{
+            setZoom(5.6)
+        }
+    }, [address, radius])
 
-    function handleApiLoaded({ map, maps }){
+    useEffect(() => {
+        if(nearbyStores.length > 0){
+            sendStoreBackToStation(nearbyStores)
+        } 
+    }, [nearbyStores])
+
+    function updateZoom(){
+        const updateZoom = Math.ceil(radius / 2500)
+        setZoom(17 - updateZoom)
+    }
+
+    function handleApiLoaded(map, maps){
+        console.log("API Loaded: ", {map, maps})
         setMap(map)
         setMaps(maps)
-
-        if(address !== ""){
-            const newCircle = new maps.Circle({
-                map: map,
-                center: coordinate,
-                radius: radius,
-                fillColor:"#FF5200",
-                fillOpacity: 0.3,
-                strokeColor: "#FF5200",
-                strokeOpacity: 0.8,
-                strokeWeight: 2,
-            });
-            setCircle(newCircle)
-        }
     }
 
-    async function handleLocationArea(locationDataFromStation){
-        const sortLocation = {}
-        const locationDataFromDb = await locationDataFromStation
-
-        if(locationDataFromDb && Array.isArray(locationDataFromDb)){
-            locationDataFromDb.map(location => {    
-            const region = location.region
-
-                if(sortLocation[region]){
-                    sortLocation[region].push(location)
-                }
-                else{
-                    sortLocation[region] = [location]
-                }
-            })
-            setLocationData(sortLocation)
-        }
-        else{
-            console.error("Location data is not available or is not an array.")
+    function handleGeoCode(userInputAddress){
+        if(!maps || !maps.Geocoder){
+            console.error("Google Maps not loaded yet!!")
         }
 
-        
-    }
-
-    function getNumberOfStore(locationData, region){
-        return locationData[region] ? locationData[region].length : 0
-    }
-
-    function haversineDistance(lat1, lng1, lat2, lng2){
-        const toRadians = (degree) => degree * (Math.PI / 180)
-
-        const R = 6371;
-        const dLat = toRadians(lat2 - lat1)
-        const dLng = toRadians(lng2 - lng1)
-
-        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                  Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) *
-                  Math.sin(dLng / 2) * Math.sin(dLng / 2)
-
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-        
-        return R * c * 1000
-    }
-
-    function handleGeoCodeAddress(address){
-        if(maps && maps.Geocoder){
-            const geocoder = new maps.Geocoder()
-
-            geocoder.geocode({address: address}, (results, status) => {
-                if(status === "OK"){
-                    const location = results[0].geometry.location
-                    setCoordinates({lat:location.lat(), lng: location.lng()})
-                    map.setCenter(location)
-                }
-                else{
-                    console.error("Geocode was not successful for the following reason: ", + status)
-                }
-            })
+        if(!address){
+            console.error("Address is Empty!!")
         }
-        else{
-            console.error("Maps or Geocoder is not loaded yet.")
-        }
-    }
 
-    function findNearestStation(userLat, userLng, stations){
-        let nearestStation = null
-        let minDistance = Infinity
-
-        stations.forEach(station => {
-            const distance = haversineDistance(userLat, userLng, station.latitude, station.longitude)
-            if(distance < minDistance){
-                minDistance = distance
-                nearestStation = station
+        const geocoder = new maps.Geocoder()
+        geocoder.geocode({address: userInputAddress}, (results, status) => {
+            if(status === "OK"){
+                const location = results[0].geometry.location
+                const lat = location.lat()
+                const lng = location.lng()
+                setUserInputLocation({lat, lng})
+                console.log("Position Changed", location)
+            }
+            else{
+                console.error("Geocode failed: ", status)
             }
         })
-        return nearestStation
     }
 
-    function handleSliderChange(event){
-        const newRadius = Number(event.target.value)
-        setRadius(newRadius)
-        setDisplayRadius(newRadius / 1000)
-
-        if(circle){
-            circle.setRadius(newRadius)
+    function calculateDistance(lat1, lng1, lat2, lng2){
+        function toRadians(deg){
+            return deg * (Math.PI / 180)
         }
 
-        const nearestStation = findNearestStation(coordinate.lat, coordinate.lng, stationLocation)
-        if(nearestStation){
-            setCoordinates({lat: nearestStation.latitude, lng: nearestStation.longitude})
-            map.setCenter({ lat:nearestStation.latitude, lng: nearestStation.longitude})
-        }
+        const radiusOfEarthKm = 6371
+        const distanceOfLat = toRadians(lat2 - lat1)
+        const distanceOfLng = toRadians(lng2 - lng1)
+        const a = Math.sin(distanceOfLat / 2) * Math.sin(distanceOfLat / 2) +
+                  Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) *
+                  Math.sin(distanceOfLng / 2) * Math.sin(distanceOfLng / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return radiusOfEarthKm * c;
     }
 
+    function sortStoreByRegion(){
+        const storesByRegion = storeLocation?.reduce((acc, store) => {
+            const region = store.region
+            if(region){
+                if(!acc[region]){
+                    acc[region] = []
+                }
+                acc[region].push(store)
+            }
+            return acc
+        }, {})
+        setStoreByRegion(storesByRegion)
+    }
+
+    function handleRadiusChange(e){
+        setRadius(e.target.value)
+    }
+
+    console.log("Map Filter: ", filter)
+    console.log("Map Store Location: ", storeLocation)
+    console.log("Map NearByStore: ", nearbyStores)
+    console.log("Map StoreByRegion: ",storeByRegion)
     return(
         <div className={style.mapContainer}>
-            <GoogleMapReact
-                bootstrapURLKeys={{key : apiKey}}
-                center={coordinate}
-                zoom={mapZoom}
-                yesIWantToUseGoogleMapApiInternals
-                onGoogleApiLoaded={handleApiLoaded}
-                options={{
-                    keyboardShortcuts: false,
-                    zoomControl: false
-                }}
+            <LoadScript
+                googleMapsApiKey={apiKey}
             >
-                {address === "" &&
-                    locationPosition.map((place, index) => {
-                        return(
-                            <div 
-                                 className={style.markerContainer}
-                                 key={index}
-                                 lat={place.latitude}
-                                 lng={place.longitude}
-                            >
-                                <FontAwesomeIcon icon={solidCircle} 
-                                                 style={{ color: '#ED560E', fontSize: '2rem', opacity: '0.6', position:'absolute'}} 
+                <GoogleMap
+                    mapContainerStyle={containerStyle}
+                    center={mapCenter}
+                    zoom={zoom}
+                    options={options}
+                    onLoad={mapInstance => handleApiLoaded(mapInstance, window.google.maps)}
+                >
+                    {address === "" &&
+                        locationPosition.map((location, index) => {
+                            const lat = Number(location.latitude)
+                            const lng = Number(location.longitude)
+                            const regionCount = locationCount.find(place => place[location.region])
+                            const regionStoreCount = storeByRegion ? storeByRegion[location.region]?.length : regionCount[location.region]
+                            return(
+                                <Marker
+                                    key={index}
+                                    position={{lat, lng}}
+                                    icon={{
+                                        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 50 50">
+                                                <circle cx="25" cy="25" r="20" stroke="orange" stroke-width="4" fill="rgba(255, 102, 0, 0.4)" />
+                                                <text x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="16px" font-family="Arial" fill="white">${regionStoreCount}</text>
+                                            </svg>
+                                        `),
+                                    }}
                                 />
-                                <FontAwesomeIcon icon={regularCircle} style={{ color: '#ED560E', fontSize: '2rem', opacity: '1'}} />
-                                <span className={style.markerNumber}>
-                                    {getNumberOfStore(locationData, place.region)}
-                                </span>
-                            </div>
-                        )
-                    })
-                }
-                {address !== "" && location && (
-                    <div lat={location.latitude} lng={location.longitude}>
-                        <img src={StationPin} alt="Station Pin.png" style={{width:"3vw", height:"9vh"}}/>
-                    </div>
-                )}
-            </GoogleMapReact>
+                            )
+                        }) 
+                    }
+                    
+                    <Circle
+                        center={mapCenter}
+                        radius={parseInt(radius)}
+                        options={{
+                            fillColor:"orange",
+                            fillOpacity: 0.2,
+                            strokeColor: "red",
+                            strokeOpacity: 0.7,
+                            strokeWeight: 1
+                        }}
+                    />
+                    {address !== "" &&
+                        nearbyStores.map((store, index) => {
+                            const lat = Number(store.latitude)
+                            const lng = Number(store.longitude)
+                            return(
+                                    <Marker
+                                        key={index}
+                                        position={{ lat, lng }}
+                                        icon={{
+                                            url:"/public/StationPin.png",
+                                            scaledSize: new window.google.maps.Size(40,50)
+                                        }}
+                                    />
+                                )
+                        })
+                    }
+                </GoogleMap>
+            </LoadScript>
 
-            {address !== "" && <div className={style.sliderContainer}>
-                <input
-                    type="range"
-                    min="5000"
-                    max="50000"
-                    step="5000"
-                    value={radius}
-                    onChange={handleSliderChange}
-                />
-                <p>{displayRadius}km</p>
-            </div>}
+            {address !== "" && 
+                <div className={style.distanceSlider}>
+                    <label>{radius / 1000} km</label>
+                    <input
+                        type="range"
+                        min="100"
+                        max="15000"
+                        value={radius}
+                        onChange={handleRadiusChange}
+                        style={{width: "100%"}}
+                    />
+                </div>
+            }
         </div>
     )
 }

@@ -1,13 +1,14 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronRight } from '@fortawesome/free-solid-svg-icons'
 import { NavLink } from 'react-router-dom'
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import style from './Filter.module.css'
 
 export default function Filter({sendDataToStation, page}){
     const [selectedService, setSelectedService] = useState("Select a service or services")
     const [selectedStationType, setSelectedStationType] = useState("Select Station Type")
     const [selectedFuelType, setSelectedFuelType] = useState("Select Fuel Type")
+    const [filter, setFilter] = useState([])
 
     const ServiceType = [{"EV Charging":["Ultra-Fast", "Fast", "Fast &/or Ultra-Fast"]},
                          {"Food & Drink": ["f'real", "Pre-order Coffee", "Z Espress Coffee & Fresh Food"]},
@@ -40,15 +41,19 @@ export default function Filter({sendDataToStation, page}){
     }
 
     function handleDataBackToStation(){
-        sendDataToStation([selectedService, selectedStationType, selectedFuelType])
+        sendDataToStation(filter)
     }
 
     function clearFilter(){
-        setSelectedService("Select a service or services")
-        setSelectedStationType("Select Station Type")
-        setSelectedFuelType("Select Fuel Type")
+        setSelectedService("")
+        setSelectedStationType("")
+        setSelectedFuelType("")
+        setFilter([])
     }
 
+    useEffect(() => {
+        setFilter([selectedService, selectedStationType, selectedFuelType])
+    }, [selectedService, selectedStationType, selectedFuelType])
 
     return(
         <div className={style.filterContainer}>
@@ -67,7 +72,7 @@ export default function Filter({sendDataToStation, page}){
                     }
                     {!checkPage(page) &&
                         <NavLink to="/journeyPlanner" className={style.currentPage}>
-                            <p>{page}</p>
+                            <p>Journey Planner</p>
                         </NavLink>
                     }
                 </div>

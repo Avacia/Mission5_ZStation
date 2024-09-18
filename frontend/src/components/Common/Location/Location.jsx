@@ -7,43 +7,27 @@ import style from './Location.module.css'
 
 
 export default function Location({ sendDataToStation, getDataFromStation }){
-    const {data, isLoading, error } = useQuery("Location", getLocation)
+    const {data: apiData, isLoading, error } = useQuery("Location", getLocation)
     const [isOpen, setIsOpen] = useState(false)
     const [isServiceOpen, setIsServiceOpen] = useState(false)
     const [serviceOpen, setServiceOpen] = useState(new Set([0]))
     const [storeOpen, setStoreOpen] = useState(new Set([0])) 
-    const [sameCity, setSameCity] = useState([])
-    const [getAddress , setGetAddress] = useState(getDataFromStation.address)
-    const [filter, setFilter] = useState(getDataFromStation.filter)
-    const [sortFilter, setSortFilter] = useState('')
-    let addressParts = []
-    const priceOrder = ["Lowest Price", "Highest Price", "A - Z Order", "Z - A Order"]
+    const [storeLocations, setStoreLocations] = useState([])
+    const priceOrder = ["Lowest Price", "Highest Price"]
 
     useEffect(() => {
-        sendDataToStation(data)
-    }, [data])
+        sendDataToStation(apiData)
+    }, [apiData])
 
     useEffect(() => {
-        setGetAddress(getDataFromStation.address)
-        setFilter(getDataFromStation.filter)
-        getLocationFromFilter()
+        if(getDataFromStation.length > 0 && getDataFromStation){
+            setStoreLocations(getDataFromStation.locations)
+        }
     }, [getDataFromStation])
 
 
     function handleFilter(e){
         setSortFilter(e.target.value)
-    }
-
-    async function getLocationFromFilter(){
-        addressParts = getAddress.split(',')
-        const mapLocation = await data
-        mapLocation.map((location) => {
-            const newLocation = [location.address, location.city]
-            const doesMatchAddress = addressParts.every(part => newLocation.every(location => location.toLowerCase().includes(part.toLowerCase()))) 
-            if(doesMatchAddress){
-                setSameCity(prev => [...prev, location])
-            }
-        })
     }
 
     function handleServiceOpen(index){
@@ -104,7 +88,7 @@ export default function Location({ sendDataToStation, getDataFromStation }){
             </select>
 
             {
-                data.map((store, index) => (
+                (storeLocations.length > 0 ? storeLocations : apiData).map((store, index) => (
                     <div className={style.locationCard} key={index}>    
                         <NavLink className={style.linkToDetail} to={`/stationDetail/${store._id}`}>
                             <h3>{store.name}</h3>
