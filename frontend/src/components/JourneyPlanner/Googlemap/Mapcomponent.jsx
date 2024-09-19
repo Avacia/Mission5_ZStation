@@ -1,80 +1,135 @@
-import React, { useEffect } from 'react';
-import styles from './Mapcomponent.module.css'
+// MapComponent.jsx
+import React, { useState, useEffect } from 'react';
+import styles from './Mapcomponent.module.css'; 
+
+import { GoogleMap, LoadScript, Marker } from '@react-google-maps/api';
+import StationPin from '/StationPin.png';
 
 const MapComponent = () => {
-    useEffect(() => {
-        const initMap = () => {
-            const location = { lat: 40.7128, lng: -74.0060 }; // Example coordinates (New York City)
+  const [address, setAddress] = useState('');
+  const [locations, setLocations] = useState([]);
+  const [center, setCenter] = useState({ lat: -40.88694417577929, lng: 172.25732675689105 });
+  const [zoom, setZoom] = useState(5.6);
+  const apiKey = process.env.REACT_APP_API_KEY;
 
-            const map = new window.google.maps.Map(document.getElementById("map"), {
-                zoom: 12,
-                center: location,
-            });
 
-            new window.google.maps.Marker({
-                position: location,
-                map: map,
-            });
-        };
+  useEffect(() => {
+    // Simulating data fetch - replace this with actual data fetching logic
+    const fetchData = async () => {
+      const mockData = {
+        address: "123 Example St, Wellington",
+        locationData: [
+          {
+            name: "Z 15th Ave",
+            address: "10-18 Fifteenth Avenue, Tauranga",
+            region: "Bay of Plenty",
+            latitude: -37.6964,
+            longitude: 176.1581,
+            payAtPump: true,
+            hours: "Open 24 hours",
+            fuelPrice: "$2.00"
+          },
+          {
+            name: "Z Aerodrone Road truck stop",
+            address: "Aerodrone Road",
+            region: "Canterbury",
+            latitude: -43.4832,
+            longitude: 172.5369,
+            payAtPump: false,
+            hours: "Open 24 hours",
+            fuelPrice: "$2.00"
+          },
+          {
+            name: "Z Hornby North truck stop",
+            address: "74 Carmen Road",
+            region: "Canterbury",
+            latitude: -43.5372,
+            longitude: 172.5269,
+            payAtPump: false,
+            hours: "Open 24 hours",
+            fuelPrice: "$2.00"
+          }
+        ]
+      };
 
-        // Load the Google Maps script
-        const loadScript = (src) => {
-            if (!window.google) {
-                const script = document.createElement("script");
-                script.src = src;
-                script.async = true;
-                script.onload = () => {
-                    if (window.google) {
-                        initMap();
-                    } else {
-                        console.error("Google Maps script failed to load.");
-                    }
-                };
-                script.onerror = () => {
-                    console.error("Error loading the Google Maps script.");
-                };
-                document.body.appendChild(script);
-            } else {
-                initMap();
-            }
-        };
+      setAddress(mockData.address);
+      processLocationData(mockData.locationData);
+    };
 
-        loadScript("https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places");
-    }, []);
+    fetchData();
+  }, []);
 
-    return (
-        <div className={styles.container}>
-            <div className={styles.details}>
-                <h2>Z  15th Ave</h2>
-                <p>10-18 Fifteenth Avenue,Tauranga</p>
-                <p>24/7 pay at pump</p>
-                <p>Monday open 24 hours</p>
-                <p>Tuesday open 24 hours </p>
-                <p>Wednesday open 24 hours </p>
-                <p>Thursday open 24 hours </p>
-                <p>Friday open 24 hours </p>
-                <p>Saturday open 24 hours </p>
-                <p>Sunday open 24 hours </p>
-                <p>open 24 hours</p>
-                <p>Services</p>
-                <p>Fuel Prices: $2.00 per litre</p>
+  const processLocationData = (data) => {
+    if (Array.isArray(data)) {
+      const processedLocations = data.map(location => ({
+        name: location.name,
+        address: location.address,
+        region: location.region,
+        lat: location.latitude,
+        lng: location.longitude,
+        payAtPump: location.payAtPump,
+        hours: location.hours,
+        fuelPrice: location.fuelPrice
+      }));
+      setLocations(processedLocations);
+    } else {
+      console.error("Location data is not available or is not an array.");
+    }
+  };
 
-                <h2>Z Aerodrone Road truck stop</h2>
-                <p>Aerodrone Road</p>
-                <p>open 24 hours</p>
-                <p>Services</p>
-                <p>Fuel Prices: $2.00 per gallon</p>
+  const handleMarkerClick = (location) => {
+    setCenter({ lat: location.lat, lng: location.lng });
+    setZoom(12);
+  };
 
-                <h2>Z Hornby North truck stop</h2>
-                <p>74 Carmen Road</p>
-                <p>open 24 hours</p>
-                <p>Services</p>
-                <p>Fuel Prices: $2.00 per litre</p>
-            </div>
-
-            <div className={styles.map} id="map" />
+  const LocationDetails = () => (
+    <div className="location-details">
+      {locations.map((location) => (
+        <div key={location.name} className="location-item">
+          <h2>{location.name}</h2>
+          <p>{location.address}</p>
+          {location.payAtPump && <p>24/7 pay at pump</p>}
+          <p>{location.hours}</p>
+          <p>Services</p>
+          <p>Fuel Prices: {location.fuelPrice} per litre</p>
         </div>
-    );
+      ))}
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', height: '600px', margin: '20px 0' }}>
+      <div style={{ width: '30%', overflowY: 'auto' }}>
+        <LocationDetails />
+      </div>
+      <div style={{ width: '70%', height: '100%' }}>
+
+        <LoadScript googleMapsApiKey={apiKey}>
+          <GoogleMap
+            mapContainerStyle={{ width: '100%', height: '100%' }}
+            center={center}
+            zoom={zoom}
+            onClick={() => setZoom(5.6)}
+          >
+            {locations.map((location) => (
+              <Marker
+                key={`${location.lat}-${location.lng}`}
+                position={{ lat: location.lat, lng: location.lng }}
+                onClick={() => handleMarkerClick(location)}
+              />
+            ))}
+            {address && (
+              <Marker
+                position={center}
+                icon={StationPin}
+              />
+            )}
+          </GoogleMap>
+        </LoadScript>
+      </div>
+    </div>
+  );
 };
+
 
 export default MapComponent;
