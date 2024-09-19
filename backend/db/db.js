@@ -1,10 +1,11 @@
 const { MongoClient } = require("mongodb")
+require("dotenv").config()
 
 let dbConnection
 
 module.exports ={
     connectToDb: (cb) => {
-        MongoClient.connect("mongodb://localhost:27017/Station")
+        MongoClient.connect(process.env.MONGODB_CONNECTION)
         .then((client) => {
             dbConnection = client.db()
             return cb()
