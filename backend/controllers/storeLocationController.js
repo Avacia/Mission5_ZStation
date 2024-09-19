@@ -1,4 +1,5 @@
 const { connectToDb, getDb } = require("../db/db")
+require("dotenv").config()
 
 
 module.exports.getStoreLocation = async(req, res) => {
@@ -12,7 +13,7 @@ module.exports.getStoreLocation = async(req, res) => {
         })
             
         let db = getDb()
-        const data = await db.collection("Station").find().toArray()
+        const data = await db.collection(process.env.COLLECTION).find().toArray()
         res.status(200).json(data)
     }
     catch(error){
