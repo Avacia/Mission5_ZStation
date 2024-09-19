@@ -16,7 +16,7 @@ export default function FindStation(){
     const [passBackLocationAndFilterFromLocation, setPassBackLocationAndFilterFromLocation] = useState([])
     const [passBackLocationFromMap, setPassBackLocationFromMap] = useState([])
     const [dataPassToMap, setDataPassToMap] = useState({address: '', filter: [], locationData: []})
-    const [dataPassToLocation, setDataPassToLocation] = useState({address: '', filter: [], locationData: []})
+    const [dataPassToLocation, setDataPassToLocation] = useState({locationData: []})
 
     function handleClickForFilter(){
         setIsFilterClicked(!isFilterClicked)
@@ -40,8 +40,7 @@ export default function FindStation(){
 
     function handleDataPassToLocation(){
         setDataPassToLocation({
-            address: passBackLocationFromHero,
-            filter: passBackFilterFromFilter
+            locations: passBackLocationFromMap
         })
     }
 
