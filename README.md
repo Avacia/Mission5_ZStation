@@ -64,16 +64,13 @@ The application is structured as follows:
 Mission5_ZStation/
 ├── backend/
 │   ├── controllers/             # Handles API requests and responses
-│   ├── middleware/              # Middleware for CORS and other functions
 │   ├── routes/                  # Defines API routes
-│   ├── models/                  # MongoDB models for data schema
 │   ├── server.js                # Main server setup file
 │   └── .env                     # Environment variables
 │
 └── frontend/
     ├── src/
     │   ├── components/          # React components
-    │   ├── pages/               # Different pages of the application
     │   ├── App.js               # Main application file
     │   └── index.js             # Entry point for React application
     └── public/                  # Public assets
